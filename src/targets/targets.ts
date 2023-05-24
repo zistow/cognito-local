@@ -1,3 +1,4 @@
+import { AdminRespondToAuthChallenge } from "./adminRespondToAuthChallenge";
 import { AddCustomAttributes } from "./addCustomAttributes";
 import { AdminAddUserToGroup } from "./adminAddUserToGroup";
 import { AdminConfirmSignUp } from "./adminConfirmSignUp";
@@ -11,6 +12,7 @@ import { AdminGetUser } from "./adminGetUser";
 import { AdminInitiateAuth } from "./adminInitiateAuth";
 import { AdminListGroupsForUser } from "./adminListGroupsForUser";
 import { AdminRemoveUserFromGroup } from "./adminRemoveUserFromGroup";
+import { AdminSetUserMFAPreference } from "./adminSetUserMFAPreference";
 import { AdminSetUserPassword } from "./adminSetUserPassword";
 import { AdminUpdateUserAttributes } from "./adminUpdateUserAttributes";
 import { ChangePassword } from "./changePassword";
@@ -59,6 +61,8 @@ export const Targets = {
   AdminInitiateAuth,
   AdminListGroupsForUser,
   AdminRemoveUserFromGroup,
+  AdminRespondToAuthChallenge,
+  AdminSetUserMFAPreference,
   AdminSetUserPassword,
   AdminUpdateUserAttributes,
   ChangePassword,

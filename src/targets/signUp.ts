@@ -115,6 +115,20 @@ export const SignUp =
       if (attributesInclude("phone_number", attributes) && autoVerifyPhone) {
         attributes.push({ Name: "phone_number_verified", Value: "true" });
       }
+    } else {
+        //to emulate our lambda
+        userStatus = "CONFIRMED";
+
+        const isEmailUsername =
+            config.UserPoolDefaults.UsernameAttributes?.includes("email");
+        const hasEmailAttribute = attributesInclude("email", attributes);
+
+        if (isEmailUsername && !hasEmailAttribute) {
+            attributes.push({Name: "email", Value: req.Username});
+        }
+        
+        attributes.push({ Name: "email_verified", Value: "false" });
+        attributes.push({ Name: "phone_number_verified", Value: "false" });         
     }
 
     const now = clock.get();

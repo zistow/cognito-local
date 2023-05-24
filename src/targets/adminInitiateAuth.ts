@@ -8,6 +8,8 @@ import {
   NotAuthorizedError,
   UnsupportedError,
 } from "../errors";
+import { v4 } from "uuid";
+import { attributesToRecord, User } from "../services/userPoolService";
 import { Services } from "../services";
 import { Target } from "./Target";
 import { Context } from "../services/context";
@@ -21,6 +23,16 @@ type AdminInitiateAuthServices = Pick<
   Services,
   "cognito" | "triggers" | "tokenGenerator"
 >;
+
+const newPasswordChallenge = (user: User): AdminInitiateAuthResponse => ({
+  ChallengeName: "NEW_PASSWORD_REQUIRED",
+  ChallengeParameters: {
+    USER_ID_FOR_SRP: user.Username,
+    requiredAttributes: JSON.stringify([]),
+    userAttributes: JSON.stringify(attributesToRecord(user.Attributes)),
+  },
+  Session: v4(),
+});
 
 const adminUserPasswordAuthFlow = async (
   ctx: Context,
@@ -70,6 +82,9 @@ const adminUserPasswordAuthFlow = async (
   if (user.Password !== req.AuthParameters.PASSWORD) {
     throw new InvalidPasswordError();
   }
+  if (user.UserStatus === "FORCE_CHANGE_PASSWORD") {
+    return newPasswordChallenge(user);
+  }
 
   const userGroups = await userPool.listUserGroupMembership(ctx, user);
 
@@ -98,6 +113,68 @@ const adminUserPasswordAuthFlow = async (
     },
   };
 };
+
+
+const adminUserPasswordlessAuthFlow = async (
+  ctx: Context,
+  services: AdminInitiateAuthServices,
+  req: AdminInitiateAuthRequest
+): Promise<AdminInitiateAuthResponse> => {
+  if (!req.AuthParameters) {
+    throw new InvalidParameterError(
+      "Missing required parameter authParameters"
+    );
+  }
+
+  if (!req.AuthParameters.USERNAME) {
+    throw new InvalidParameterError(
+      "AuthParameters USERNAME are required"
+    );
+  }
+
+  const userPool = await services.cognito.getUserPoolForClientId(
+    ctx,
+    req.ClientId
+  );
+  const userPoolClient = await services.cognito.getAppClient(ctx, req.ClientId);
+  let user = await userPool.getUserByUsername(ctx, req.AuthParameters.USERNAME);
+
+  if (!user || !userPoolClient) {
+    throw new NotAuthorizedError();
+  }
+
+  if (user.UserStatus === "FORCE_CHANGE_PASSWORD") {
+    return newPasswordChallenge(user);
+  }
+
+  const userGroups = await userPool.listUserGroupMembership(ctx, user);
+
+  const tokens = await services.tokenGenerator.generate(
+    ctx,
+    user,
+    userGroups,
+    userPoolClient,
+    req.ClientMetadata,
+    "Authentication"
+  );
+
+  await userPool.storeRefreshToken(ctx, tokens.RefreshToken, user);
+
+  return {
+    ChallengeName: undefined,
+    Session: undefined,
+    ChallengeParameters: undefined,
+    AuthenticationResult: {
+      AccessToken: tokens.AccessToken,
+      RefreshToken: tokens.RefreshToken,
+      IdToken: tokens.IdToken,
+      NewDeviceMetadata: undefined,
+      TokenType: undefined,
+      ExpiresIn: undefined,
+    },
+  };
+};
+
 
 const refreshTokenAuthFlow = async (
   ctx: Context,
@@ -158,6 +235,10 @@ export const AdminInitiateAuth =
   async (ctx, req) => {
     if (req.AuthFlow === "ADMIN_USER_PASSWORD_AUTH") {
       return adminUserPasswordAuthFlow(ctx, services, req);
+    } else if (
+      req.AuthFlow === "CUSTOM_AUTH"
+    ) {
+      return adminUserPasswordlessAuthFlow(ctx, services, req);
     } else if (
       req.AuthFlow === "REFRESH_TOKEN_AUTH" ||
       req.AuthFlow === "REFRESH_TOKEN"
